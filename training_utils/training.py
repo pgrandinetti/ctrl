@@ -56,7 +56,7 @@ seq_length = args.sequence_len
 
 def input_fn(params=None):
     print('READING!', params)
-    dataset = tf.data.Dataset.list_files(tf.io.gfile.glob('./*.tfrecords'), shuffle=True)
+    dataset = tf.data.Dataset.list_files(tf.io.gfile.glob('gs://ctrl-tuning/*.tfrecords'), shuffle=True)
 
     tf_data = tf.data.TFRecordDataset(dataset)
     myfeatures = {
@@ -134,7 +134,7 @@ def loss(labels, logits):
 # however, to compile the model, we still define it
 optimizer = tf.contrib.estimator.clip_gradients_by_norm(
         tf.train.AdagradOptimizer(learning_rate=1e-2), 0.25)
-
+optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
 
 # compile the model with the optimizer and loss            
 model.compile(optimizer=optimizer, loss=loss)
@@ -153,7 +153,14 @@ run_config = tf.contrib.tpu.RunConfig(
 # this step is critical
 # remember to patch the TF 1.14 file before running the code, else you're going to see errors here
 
+cluster = tf.contrib.cluster_resolver.TPUClusterResolver(
+    tpu=os.environ['TPU_NAME'],
+    zone=os.environ['TPU_ZONE'],
+    project=os.environ['PROJECT_NAME']
+)
+
 run_config = tf.contrib.tpu.RunConfig(
+        cluster=cluster,
         model_dir=args.model_dir,
         session_config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True),
         tpu_config=tf.contrib.tpu.TPUConfig(iterations_per_loop=100, num_cores_per_replica=1, input_partition_dims=[[1, 1], [1, 1]], per_host_input_for_training=3))
